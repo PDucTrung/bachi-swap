@@ -11,7 +11,6 @@ contract NodeManager is Pausable, AccessControl, Ownable {
     using EnumerableSet for EnumerableSet.UintSet;
 
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
-    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
     Node public nodeContract;
 
@@ -71,7 +70,6 @@ contract NodeManager is Pausable, AccessControl, Ownable {
 
     constructor(address _nodeContract) Ownable(msg.sender) {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(MINTER_ROLE, msg.sender);
         nodeContract = Node(_nodeContract);
     }
 
