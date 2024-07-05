@@ -5,11 +5,8 @@ import "./Node.sol"; // Ensure the correct path to the Node.sol file
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 contract NodeManager is Pausable, AccessControl, Ownable {
-    using EnumerableSet for EnumerableSet.UintSet;
-
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
     Node public nodeContract;
@@ -23,7 +20,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
 
     uint256 public nodeId;
     mapping(uint256 => NodeTier) public nodeTiers;
-    mapping(address => EnumerableSet.UintSet) private userNodeTiersLinks;
+    mapping(address => uint256[]) private userNodeTiersLinks;
     mapping(uint256 => address) private nodeTierToOwner;
 
     struct DiscountCoupon {
@@ -86,7 +83,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
     }
 
     function setNodeContractAddress(address _nodeContract) public {
-         nodeContract = Node(_nodeContract);
+        nodeContract = Node(_nodeContract);
     }
 
     // NODE Tier MANAGEMENT
@@ -115,25 +112,17 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         view
         returns (uint256)
     {
-        require(
-            index < userNodeTiersLinks[user].length(),
-            "Index out of bounds"
-        );
-        uint256 nodeTierId = userNodeTiersLinks[user].at(index);
+        require(index < userNodeTiersLinks[user].length, "Index out of bounds");
+        uint256 nodeTierId = userNodeTiersLinks[user][index];
         return nodeTierId;
     }
 
-    function getNodeIds(address user) public view returns (uint256[] memory) {
-        uint256 length = userNodeTiersLinks[user].length();
-        uint256[] memory nodeIds = new uint256[](length);
-        for (uint256 i = 0; i < length; i++) {
-            nodeIds[i] = userNodeTiersLinks[user].at(i);
-        }
-        return nodeIds;
+    function getOwnerByNodeId(uint256 _nodeId) public view returns (address) {
+        return nodeTierToOwner[_nodeId];
     }
 
     function getUserTotalNode(address user) public view returns (uint256) {
-        return userNodeTiersLinks[user].length();
+        return userNodeTiersLinks[user].length;
     }
 
     function getNodeTierDetails(uint64 _nodeId)
@@ -233,7 +222,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
             "Node tier already owned"
         );
         nodeContract.safeMint(msg.sender, _nodeId);
-        userNodeTiersLinks[msg.sender].add(nodeId);
+        userNodeTiersLinks[msg.sender].push(nodeId);
         nodeTierToOwner[_nodeId] = msg.sender;
         emit Sale(msg.sender, _nodeId);
     }
@@ -249,7 +238,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
             "Node tier already owned"
         );
         nodeContract.safeMint(nodeOwner, _nodeId);
-        userNodeTiersLinks[msg.sender].add(nodeId);
+        userNodeTiersLinks[msg.sender].push(nodeId);
         nodeTierToOwner[_nodeId] = msg.sender;
         emit Sale(msg.sender, _nodeId);
     }
