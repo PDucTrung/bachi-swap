@@ -222,7 +222,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
             "Node tier already owned"
         );
         nodeContract.safeMint(msg.sender, _nodeId);
-        userNodeTiersLinks[msg.sender].push(nodeId);
+        userNodeTiersLinks[msg.sender].push(_nodeId);
         nodeTierToOwner[_nodeId] = msg.sender;
         emit Sale(msg.sender, _nodeId);
     }
@@ -238,7 +238,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
             "Node tier already owned"
         );
         nodeContract.safeMint(nodeOwner, _nodeId);
-        userNodeTiersLinks[msg.sender].push(nodeId);
+        userNodeTiersLinks[msg.sender].push(_nodeId);
         nodeTierToOwner[_nodeId] = msg.sender;
         emit Sale(msg.sender, _nodeId);
     }
