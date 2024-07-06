@@ -256,7 +256,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         // Referral code can only be used once per person
         if (
             affiliateIdUserLinks[affiliateId] != caller &&
-            usersUsedReference.contains(caller) &&
+            !usersUsedReference.contains(caller) &&
             !affiliates[affiliateId].usersUsed.contains(caller)
         ) {
             address affiliatesOwner = affiliateIdUserLinks[affiliateId];
