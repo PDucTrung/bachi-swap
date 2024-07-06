@@ -45,6 +45,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
     mapping(string => AffiliateInformation) private affiliates;
     mapping(address => string) private userAffiliateIdLinks;
     mapping(string => address) private affiliateIdUserLinks;
+    EnumerableSet.AddressSet usersUsedReference;
 
     // Events
     event AddedNode(
@@ -252,9 +253,10 @@ contract NodeManager is Pausable, AccessControl, Ownable {
             nodeTierToOwner[_nodeId] == address(0),
             "Node tier already owned"
         );
-        // use Affiliate
+        // Referral code can only be used once per person
         if (
             affiliateIdUserLinks[affiliateId] != caller &&
+            usersUsedReference.contains(caller) &&
             !affiliates[affiliateId].usersUsed.contains(caller)
         ) {
             address affiliatesOwner = affiliateIdUserLinks[affiliateId];
@@ -264,6 +266,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
             require(sent, "Failed to send Ether");
             affiliates[affiliateId].totalSales += totalSales;
             affiliates[affiliateId].usersUsed.add(caller);
+            usersUsedReference.add(caller);
         }
 
         nodeContract.safeMint(caller, _nodeId);
@@ -332,6 +335,18 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         return affiliates[affiliateId].usersUsed.length();
     }
 
+    function userUsedTheReferralCode(address user) public view returns (bool) {
+        return usersUsedReference.contains(user);
+    }
+
+    function getUserUsedTheReferralCodeByIndex(uint256 index)
+        public
+        view
+        returns (address)
+    {
+        return usersUsedReference.at(index);
+    }
+
     function getReferenceRevenue() public view returns (uint256) {
         return referenceRevenue;
     }
@@ -341,6 +356,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         onlyRole(ADMIN_ROLE)
         whenNotPaused
     {
+        require(_referenceRevenue <= 100, "Invalid input");
         referenceRevenue = _referenceRevenue;
     }
 
