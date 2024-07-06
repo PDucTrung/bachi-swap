@@ -85,6 +85,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         Ownable(msg.sender)
     {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        require(_referenceRevenue <= 100, "Invalid input");
         referenceRevenue = _referenceRevenue;
         nodeContract = Node(_nodeContract);
     }
@@ -147,7 +148,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         return userNodeTiersLinks[user].length();
     }
 
-    function getNodeTierDetails(uint64 _nodeId)
+    function getNodeTierDetails(uint256 _nodeId)
         public
         view
         returns (NodeTier memory)
@@ -160,7 +161,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
     }
 
     function updateNodeTier(
-        uint64 _nodeId,
+        uint256 _nodeId,
         string memory newName,
         string memory newMetadata,
         bool newStatus,
@@ -205,7 +206,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         );
     }
 
-    function getDiscountCoupon(uint64 _couponId)
+    function getDiscountCoupon(uint256 _couponId)
         public
         view
         returns (DiscountCoupon memory)
@@ -218,7 +219,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
     }
 
     function updateDiscountCoupon(
-        uint64 _couponId,
+        uint256 _couponId,
         uint8 newDiscountPercent,
         bool newStatus
     ) public onlyRole(ADMIN_ROLE) whenNotPaused {
@@ -240,7 +241,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         );
     }
 
-    function buyNode(uint64 _nodeId, string memory affiliateId)
+    function buyNode(uint256 _nodeId, string memory affiliateId)
         public
         payable
         whenNotPaused
@@ -253,6 +254,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
             nodeTierToOwner[_nodeId] == address(0),
             "Node tier already owned"
         );
+
         // Referral code can only be used once per person
         if (
             affiliateIdUserLinks[affiliateId] != caller &&
@@ -360,7 +362,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         referenceRevenue = _referenceRevenue;
     }
 
-    function buyAdmin(uint64 _nodeId, address nodeOwner)
+    function buyAdmin(uint256 _nodeId, address nodeOwner)
         public
         onlyRole(ADMIN_ROLE)
         whenNotPaused
