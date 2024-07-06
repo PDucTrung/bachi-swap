@@ -9,6 +9,7 @@ import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 contract NodeManager is Pausable, AccessControl, Ownable {
     using EnumerableSet for EnumerableSet.UintSet;
+    using EnumerableSet for EnumerableSet.AddressSet;
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
     Node public nodeContract;
@@ -20,9 +21,9 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         uint256 price;
     }
 
-    uint256 public nodeId;
+    uint256 private nodeId;
     mapping(uint256 => NodeTier) public nodeTiers;
-    mapping (address => EnumerableSet.UintSet) private userNodeTiersLinks;
+    mapping(address => EnumerableSet.UintSet) private userNodeTiersLinks;
     mapping(uint256 => address) private nodeTierToOwner;
 
     struct DiscountCoupon {
@@ -30,8 +31,19 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         uint8 discountPercent;
     }
 
-    uint256 public couponId;
+    uint256 private couponId;
     mapping(uint256 => DiscountCoupon) public discountCoupons;
+
+    // Affiliate
+    uint256 private discountId;
+    struct AffiliateInformation {
+        uint256 totalSales;
+        uint256 commissionRate;
+        EnumerableSet.AddressSet usersUsed;
+    }
+    mapping(string => AffiliateInformation) private affiliates;
+    mapping(address => string) private userAffiliateIdLinks;
+    mapping(string => address) private affiliateIdUserLinks;
 
     // Events
     event AddedNode(
@@ -114,7 +126,10 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         view
         returns (uint256)
     {
-        require(index < userNodeTiersLinks[user].length(), "Index out of bounds");
+        require(
+            index < userNodeTiersLinks[user].length(),
+            "Index out of bounds"
+        );
         uint256 nodeTierId = userNodeTiersLinks[user].at(index);
         return nodeTierId;
     }
@@ -135,7 +150,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         return nodeTiers[_nodeId];
     }
 
-    function getTotalNode() public view returns (uint256) {
+    function getLastNodeId() public view returns (uint256) {
         return nodeId;
     }
 
@@ -193,6 +208,10 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         return discountCoupons[_couponId];
     }
 
+    function getLastCouponId() public view returns (uint256) {
+        return couponId;
+    }
+
     function updateDiscountCoupon(
         uint64 _couponId,
         uint8 newDiscountPercent,
@@ -216,17 +235,94 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         );
     }
 
-    function buyNode(uint64 _nodeId) public payable whenNotPaused {
+    function buyNode(uint64 _nodeId, string memory affiliateId)
+        public
+        payable
+        whenNotPaused
+    {
+        uint256 price = nodeTiers[_nodeId].price;
+        address caller = msg.sender;
         require(nodeTiers[_nodeId].price > 0, "Node does not exist");
-        require(msg.value >= nodeTiers[_nodeId].price, "Insufficient funds");
+        require(msg.value >= price, "Insufficient funds");
         require(
             nodeTierToOwner[_nodeId] == address(0),
             "Node tier already owned"
         );
-        nodeContract.safeMint(msg.sender, _nodeId);
-        userNodeTiersLinks[msg.sender].add(_nodeId);
-        nodeTierToOwner[_nodeId] = msg.sender;
-        emit Sale(msg.sender, _nodeId);
+        // use Affiliate
+        if (affiliateIdUserLinks[affiliateId] != caller && !affiliates[affiliateId].usersUsed.contains(caller)) {
+            address affiliatesOwner = affiliateIdUserLinks[affiliateId];
+            uint256 totalSales = (price * affiliates[affiliateId].commissionRate) / 100;
+            (bool sent, ) = affiliatesOwner.call{value: totalSales}("");
+            require(sent, "Failed to send Ether");
+            affiliates[affiliateId].totalSales += totalSales;
+            affiliates[affiliateId].usersUsed.add(caller);
+        }
+
+        nodeContract.safeMint(caller, _nodeId);
+        userNodeTiersLinks[caller].add(_nodeId);
+        nodeTierToOwner[_nodeId] = caller;
+
+        // add Affiliate for user
+        if (bytes(userAffiliateIdLinks[caller]).length == 0) {
+            discountId++;
+            uint256 currentTimestamp = block.timestamp;
+            string memory _affiliateId = string(
+                abi.encodePacked(
+                    "BachiSwap_",
+                    uint256str(discountId),
+                    "_",
+                    uint256str(currentTimestamp)
+                )
+            );
+            userAffiliateIdLinks[caller] = _affiliateId;
+            affiliateIdUserLinks[_affiliateId] = caller;
+            affiliates[_affiliateId].totalSales = 0;
+            affiliates[_affiliateId].commissionRate = 10;
+        }
+        emit Sale(caller, _nodeId);
+    }
+
+    function getAffiliateIdByOwner(address owner)
+        public
+        view
+        returns (string memory)
+    {
+        return userAffiliateIdLinks[owner];
+    }
+
+    function getOwnerByAffiliateId(string memory affiliateId)
+        public
+        view
+        returns (address)
+    {
+        return affiliateIdUserLinks[affiliateId];
+    }
+
+    function getAffiliateInfo(string memory affiliateId)
+        public
+        view
+        returns (uint256 totalSales, uint256 commissionRate)
+    {
+        return (
+            affiliates[affiliateId].totalSales,
+            affiliates[affiliateId].commissionRate
+        );
+    }
+
+    function getUserUsedAffiliateByIndex(
+        string memory affiliateId,
+        uint256 index
+    ) public view returns (address) {
+        address user = affiliates[affiliateId].usersUsed.at(index);
+        return user;
+    }
+
+    function getTotalUserUsedAffiliate(string memory affiliateId)
+        public
+        view
+        returns (uint256)
+    {
+        return affiliates[affiliateId].usersUsed.length();
     }
 
     function buyAdmin(uint64 _nodeId, address nodeOwner)
@@ -255,6 +351,29 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         require(sent, "Failed to send Ether");
 
         emit FundsWithdrawn(to, value);
+    }
+
+    // Helper function to convert uint256 to string
+    function uint256str(uint256 _i) internal pure returns (string memory) {
+        if (_i == 0) {
+            return "0";
+        }
+        uint256 j = _i;
+        uint256 len;
+        while (j != 0) {
+            len++;
+            j /= 10;
+        }
+        bytes memory bstr = new bytes(len);
+        uint256 k = len;
+        while (_i != 0) {
+            k = k - 1;
+            uint8 temp = (48 + uint8(_i - (_i / 10) * 10));
+            bytes1 b1 = bytes1(temp);
+            bstr[k] = b1;
+            _i /= 10;
+        }
+        return string(bstr);
     }
 
     // Fallback function to receive Ether
