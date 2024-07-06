@@ -35,7 +35,8 @@ contract NodeManager is Pausable, AccessControl, Ownable {
     mapping(uint256 => DiscountCoupon) public discountCoupons;
 
     // Affiliate
-    uint256 private discountId;
+    uint256 private referenceId;
+    uint256 private referenceRevenue;
     struct AffiliateInformation {
         uint256 totalSales;
         uint256 commissionRate;
@@ -79,8 +80,11 @@ contract NodeManager is Pausable, AccessControl, Ownable {
     event Sale(address indexed user, uint256 nodeId);
     event FundsWithdrawn(address indexed to, uint256 value);
 
-    constructor(address _nodeContract) Ownable(msg.sender) {
+    constructor(address _nodeContract, uint256 _referenceRevenue)
+        Ownable(msg.sender)
+    {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        referenceRevenue = _referenceRevenue;
         nodeContract = Node(_nodeContract);
     }
 
@@ -249,9 +253,13 @@ contract NodeManager is Pausable, AccessControl, Ownable {
             "Node tier already owned"
         );
         // use Affiliate
-        if (affiliateIdUserLinks[affiliateId] != caller && !affiliates[affiliateId].usersUsed.contains(caller)) {
+        if (
+            affiliateIdUserLinks[affiliateId] != caller &&
+            !affiliates[affiliateId].usersUsed.contains(caller)
+        ) {
             address affiliatesOwner = affiliateIdUserLinks[affiliateId];
-            uint256 totalSales = (price * affiliates[affiliateId].commissionRate) / 100;
+            uint256 totalSales = (price *
+                affiliates[affiliateId].commissionRate) / 100;
             (bool sent, ) = affiliatesOwner.call{value: totalSales}("");
             require(sent, "Failed to send Ether");
             affiliates[affiliateId].totalSales += totalSales;
@@ -264,20 +272,19 @@ contract NodeManager is Pausable, AccessControl, Ownable {
 
         // add Affiliate for user
         if (bytes(userAffiliateIdLinks[caller]).length == 0) {
-            discountId++;
+            referenceId++;
             uint256 currentTimestamp = block.timestamp;
             string memory _affiliateId = string(
                 abi.encodePacked(
                     "BachiSwap_",
-                    uint256str(discountId),
+                    uint256str(referenceId),
                     "_",
                     uint256str(currentTimestamp)
                 )
             );
             userAffiliateIdLinks[caller] = _affiliateId;
             affiliateIdUserLinks[_affiliateId] = caller;
-            affiliates[_affiliateId].totalSales = 0;
-            affiliates[_affiliateId].commissionRate = 10;
+            affiliates[_affiliateId].commissionRate = referenceRevenue;
         }
         emit Sale(caller, _nodeId);
     }
@@ -323,6 +330,18 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         returns (uint256)
     {
         return affiliates[affiliateId].usersUsed.length();
+    }
+
+    function getReferenceRevenue() public view returns (uint256) {
+        return referenceRevenue;
+    }
+
+    function setReferenceRevenue(uint256 _referenceRevenue)
+        public
+        onlyRole(ADMIN_ROLE)
+        whenNotPaused
+    {
+        referenceRevenue = _referenceRevenue;
     }
 
     function buyAdmin(uint64 _nodeId, address nodeOwner)
