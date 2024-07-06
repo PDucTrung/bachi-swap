@@ -5,8 +5,10 @@ import "./Node.sol"; // Ensure the correct path to the Node.sol file
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 contract NodeManager is Pausable, AccessControl, Ownable {
+    using EnumerableSet for EnumerableSet.UintSet;
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
     Node public nodeContract;
@@ -20,7 +22,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
 
     uint256 public nodeId;
     mapping(uint256 => NodeTier) public nodeTiers;
-    mapping(address => uint256[]) private userNodeTiersLinks;
+    mapping (address => EnumerableSet.UintSet) private userNodeTiersLinks;
     mapping(uint256 => address) private nodeTierToOwner;
 
     struct DiscountCoupon {
@@ -112,8 +114,8 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         view
         returns (uint256)
     {
-        require(index < userNodeTiersLinks[user].length, "Index out of bounds");
-        uint256 nodeTierId = userNodeTiersLinks[user][index];
+        require(index < userNodeTiersLinks[user].length(), "Index out of bounds");
+        uint256 nodeTierId = userNodeTiersLinks[user].at(index);
         return nodeTierId;
     }
 
@@ -122,7 +124,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
     }
 
     function getUserTotalNode(address user) public view returns (uint256) {
-        return userNodeTiersLinks[user].length;
+        return userNodeTiersLinks[user].length();
     }
 
     function getNodeTierDetails(uint64 _nodeId)
@@ -222,7 +224,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
             "Node tier already owned"
         );
         nodeContract.safeMint(msg.sender, _nodeId);
-        userNodeTiersLinks[msg.sender].push(_nodeId);
+        userNodeTiersLinks[msg.sender].add(_nodeId);
         nodeTierToOwner[_nodeId] = msg.sender;
         emit Sale(msg.sender, _nodeId);
     }
@@ -238,7 +240,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
             "Node tier already owned"
         );
         nodeContract.safeMint(nodeOwner, _nodeId);
-        userNodeTiersLinks[msg.sender].push(_nodeId);
+        userNodeTiersLinks[msg.sender].add(_nodeId);
         nodeTierToOwner[_nodeId] = msg.sender;
         emit Sale(msg.sender, _nodeId);
     }
