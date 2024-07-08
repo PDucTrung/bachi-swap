@@ -232,7 +232,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         );
     }
 
-    function buyNode(uint256 _nodeId, uint256 referralId)
+    function buyNode(uint256 _nodeId, uint256 referralId, string memory metadata)
         public
         payable
         whenNotPaused
@@ -260,7 +260,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
             referrals[referralId].totalSales += totalSales;
         }
 
-        nodeContract.safeMint(caller, _nodeId);
+        nodeContract.safeMint(caller, _nodeId, metadata);
         userNodeTiersIdLinks[caller].add(_nodeId);
         nodeTiersIdUserLinks[_nodeId] = caller;
 
@@ -325,7 +325,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         referenceRate = _referenceRate;
     }
 
-    function buyAdmin(uint256 _nodeId, address nodeOwner)
+    function buyAdmin(uint256 _nodeId, address nodeOwner, string memory metadata)
         public
         onlyRole(ADMIN_ROLE)
         whenNotPaused
@@ -335,7 +335,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
             nodeTiersIdUserLinks[_nodeId] == address(0),
             "Node tier already owned"
         );
-        nodeContract.safeMint(nodeOwner, _nodeId);
+        nodeContract.safeMint(nodeOwner, _nodeId, metadata);
         userNodeTiersIdLinks[msg.sender].add(_nodeId);
         nodeTiersIdUserLinks[_nodeId] = msg.sender;
         emit Sale(msg.sender, _nodeId);
