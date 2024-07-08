@@ -8,7 +8,6 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract Node is ERC721, ERC721Burnable, AccessControl, Ownable {
-    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     address private nodeManagerAddress;
 
     constructor(string memory name, string memory symbol, address _nodeManagerAddress)
@@ -16,7 +15,6 @@ contract Node is ERC721, ERC721Burnable, AccessControl, Ownable {
         Ownable(msg.sender)
     {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(MINTER_ROLE, msg.sender);
         nodeManagerAddress = _nodeManagerAddress;
     }
 

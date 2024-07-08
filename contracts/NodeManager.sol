@@ -17,7 +17,6 @@ contract NodeManager is Pausable, AccessControl, Ownable {
     struct NodeTier {
         bool status;
         string name;
-        string metadata;
         uint256 price;
     }
 
@@ -34,18 +33,17 @@ contract NodeManager is Pausable, AccessControl, Ownable {
     uint256 private couponId;
     mapping(uint256 => DiscountCoupon) public discountCoupons;
 
-    // Affiliate
+    // Referral
     uint256 private referenceId;
-    uint256 private referenceRevenue;
-    struct AffiliateInformation {
+    uint256 private referenceRate;
+    struct ReferralInformation {
+        string code;
         uint256 totalSales;
         uint256 commissionRate;
-        EnumerableSet.AddressSet usersUsed;
     }
-    mapping(string => AffiliateInformation) private affiliates;
-    mapping(address => string) private userAffiliateIdLinks;
-    mapping(string => address) private affiliateIdUserLinks;
-    EnumerableSet.AddressSet usersUsedReference;
+    mapping(uint256 => ReferralInformation) private referrals;
+    mapping(address => uint256) private userReferralIdLinks;
+    mapping(uint256 => address) private referralIdUserLinks;
 
     // Events
     event AddedNode(
@@ -53,7 +51,6 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         uint256 nodeId,
         bool status,
         string name,
-        string metadata,
         uint256 price
     );
     event UpdatedNode(
@@ -61,7 +58,6 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         uint256 nodeId,
         bool status,
         string name,
-        string metadata,
         uint256 price
     );
 
@@ -81,12 +77,12 @@ contract NodeManager is Pausable, AccessControl, Ownable {
     event Sale(address indexed user, uint256 nodeId);
     event FundsWithdrawn(address indexed to, uint256 value);
 
-    constructor(address _nodeContract, uint256 _referenceRevenue)
+    constructor(address _nodeContract, uint256 _referenceRate)
         Ownable(msg.sender)
     {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        require(_referenceRevenue <= 100, "Invalid input");
-        referenceRevenue = _referenceRevenue;
+        require(_referenceRate <= 100, "Invalid input");
+        referenceRate = _referenceRate;
         nodeContract = Node(_nodeContract);
     }
 
@@ -110,19 +106,17 @@ contract NodeManager is Pausable, AccessControl, Ownable {
 
     function addNodeTier(
         string memory name,
-        string memory metadata,
         uint256 price
     ) public onlyRole(ADMIN_ROLE) whenNotPaused {
         require(price > 0, "Price must be greater than 0");
         nodeId++;
-        NodeTier memory newNode = NodeTier(false, name, metadata, price);
+        NodeTier memory newNode = NodeTier(false, name, price);
         nodeTiers[nodeId] = newNode;
         emit AddedNode(
             msg.sender,
             nodeId,
             nodeTiers[nodeId].status,
             name,
-            metadata,
             price
         );
     }
@@ -163,14 +157,12 @@ contract NodeManager is Pausable, AccessControl, Ownable {
     function updateNodeTier(
         uint256 _nodeId,
         string memory newName,
-        string memory newMetadata,
         bool newStatus,
         uint256 newPrice
     ) public onlyRole(ADMIN_ROLE) whenNotPaused {
         require(nodeTiers[_nodeId].price > 0, "Node does not exist");
         require(newPrice > 0, "Price must be greater than 0");
         nodeTiers[_nodeId].name = newName;
-        nodeTiers[_nodeId].metadata = newMetadata;
         nodeTiers[_nodeId].status = newStatus;
         nodeTiers[_nodeId].price = newPrice;
 
@@ -179,7 +171,6 @@ contract NodeManager is Pausable, AccessControl, Ownable {
             _nodeId,
             nodeTiers[_nodeId].status,
             nodeTiers[_nodeId].name,
-            nodeTiers[_nodeId].metadata,
             nodeTiers[_nodeId].price
         );
     }
@@ -241,7 +232,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         );
     }
 
-    function buyNode(uint256 _nodeId, string memory affiliateId)
+    function buyNode(uint256 _nodeId, uint256 referralId)
         public
         payable
         whenNotPaused
@@ -257,29 +248,27 @@ contract NodeManager is Pausable, AccessControl, Ownable {
 
         // Referral code can only be used once per person
         if (
-            affiliateIdUserLinks[affiliateId] != caller &&
-            !usersUsedReference.contains(caller) &&
-            !affiliates[affiliateId].usersUsed.contains(caller)
+            referralId > 0 &&
+            referralIdUserLinks[referralId] != caller
         ) {
-            address affiliatesOwner = affiliateIdUserLinks[affiliateId];
+            address referralsOwner = referralIdUserLinks[referralId];
             uint256 totalSales = (price *
-                affiliates[affiliateId].commissionRate) / 100;
-            (bool sent, ) = affiliatesOwner.call{value: totalSales}("");
+                referrals[referralId].commissionRate) / 100;
+            require(address(this).balance >= totalSales, "Not enough balance");
+            (bool sent, ) = referralsOwner.call{value: totalSales}("");
             require(sent, "Failed to send Ether");
-            affiliates[affiliateId].totalSales += totalSales;
-            affiliates[affiliateId].usersUsed.add(caller);
-            usersUsedReference.add(caller);
+            referrals[referralId].totalSales += totalSales;
         }
 
         nodeContract.safeMint(caller, _nodeId);
         userNodeTiersLinks[caller].add(_nodeId);
         nodeTierToOwner[_nodeId] = caller;
 
-        // add Affiliate for user
-        if (bytes(userAffiliateIdLinks[caller]).length == 0) {
+        // add Referral for user
+        if (userReferralIdLinks[caller] == 0) {
             referenceId++;
             uint256 currentTimestamp = block.timestamp;
-            string memory _affiliateId = string(
+            string memory _code = string(
                 abi.encodePacked(
                     "BachiSwap_",
                     uint256str(referenceId),
@@ -287,79 +276,53 @@ contract NodeManager is Pausable, AccessControl, Ownable {
                     uint256str(currentTimestamp)
                 )
             );
-            userAffiliateIdLinks[caller] = _affiliateId;
-            affiliateIdUserLinks[_affiliateId] = caller;
-            affiliates[_affiliateId].commissionRate = referenceRevenue;
+            userReferralIdLinks[caller] = referenceId;
+            referralIdUserLinks[referenceId] = caller;
+            referrals[referenceId].code = _code;
+            referrals[referenceId].commissionRate = referenceRate;
         }
         emit Sale(caller, _nodeId);
     }
 
-    function getAffiliateIdByOwner(address owner)
-        public
-        view
-        returns (string memory)
-    {
-        return userAffiliateIdLinks[owner];
-    }
-
-    function getOwnerByAffiliateId(string memory affiliateId)
-        public
-        view
-        returns (address)
-    {
-        return affiliateIdUserLinks[affiliateId];
-    }
-
-    function getAffiliateInfo(string memory affiliateId)
-        public
-        view
-        returns (uint256 totalSales, uint256 commissionRate)
-    {
-        return (
-            affiliates[affiliateId].totalSales,
-            affiliates[affiliateId].commissionRate
-        );
-    }
-
-    function getUserUsedAffiliateByIndex(
-        string memory affiliateId,
-        uint256 index
-    ) public view returns (address) {
-        address user = affiliates[affiliateId].usersUsed.at(index);
-        return user;
-    }
-
-    function getTotalUserUsedAffiliate(string memory affiliateId)
+    function getReferralIdByOwner(address owner)
         public
         view
         returns (uint256)
     {
-        return affiliates[affiliateId].usersUsed.length();
+        return userReferralIdLinks[owner];
     }
 
-    function userUsedTheReferralCode(address user) public view returns (bool) {
-        return usersUsedReference.contains(user);
-    }
-
-    function getUserUsedTheReferralCodeByIndex(uint256 index)
+    function getOwnerByReferralId(uint256 referralId)
         public
         view
         returns (address)
     {
-        return usersUsedReference.at(index);
+        return referralIdUserLinks[referralId];
     }
 
-    function getReferenceRevenue() public view returns (uint256) {
-        return referenceRevenue;
+    function getReferralInfo(uint256 referralId)
+        public
+        view
+        returns (string memory code, uint256 totalSales, uint256 commissionRate)
+    {
+        return (
+            referrals[referralId].code,
+            referrals[referralId].totalSales,
+            referrals[referralId].commissionRate
+        );
     }
 
-    function setReferenceRevenue(uint256 _referenceRevenue)
+    function getReferenceRate() public view returns (uint256) {
+        return referenceRate;
+    }
+
+    function setReferenceRate(uint256 _referenceRate)
         public
         onlyRole(ADMIN_ROLE)
         whenNotPaused
     {
-        require(_referenceRevenue <= 100, "Invalid input");
-        referenceRevenue = _referenceRevenue;
+        require(_referenceRate <= 100, "Invalid input");
+        referenceRate = _referenceRate;
     }
 
     function buyAdmin(uint256 _nodeId, address nodeOwner)
