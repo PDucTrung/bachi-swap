@@ -46,7 +46,7 @@ contract Node is
         address to,
         uint256 tokenId,
         string memory uri
-    ) public onlyOwner {
+    ) public onlyNodeManager {
         _safeMint(to, tokenId);
         _setTokenURI(tokenId, uri);
     }
