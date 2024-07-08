@@ -22,8 +22,8 @@ contract NodeManager is Pausable, AccessControl, Ownable {
 
     uint256 private nodeId;
     mapping(uint256 => NodeTier) public nodeTiers;
-    mapping(address => EnumerableSet.UintSet) private userNodeTiersLinks;
-    mapping(uint256 => address) private nodeTierToOwner;
+    mapping(address => EnumerableSet.UintSet) private userNodeTiersIdLinks;
+    mapping(uint256 => address) private nodeTiersIdUserLinks;
 
     struct DiscountCoupon {
         bool status;
@@ -127,19 +127,19 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         returns (uint256)
     {
         require(
-            index < userNodeTiersLinks[user].length(),
+            index < userNodeTiersIdLinks[user].length(),
             "Index out of bounds"
         );
-        uint256 nodeTierId = userNodeTiersLinks[user].at(index);
+        uint256 nodeTierId = userNodeTiersIdLinks[user].at(index);
         return nodeTierId;
     }
 
     function getOwnerByNodeId(uint256 _nodeId) public view returns (address) {
-        return nodeTierToOwner[_nodeId];
+        return nodeTiersIdUserLinks[_nodeId];
     }
 
     function getUserTotalNode(address user) public view returns (uint256) {
-        return userNodeTiersLinks[user].length();
+        return userNodeTiersIdLinks[user].length();
     }
 
     function getNodeTierDetails(uint256 _nodeId)
@@ -242,7 +242,7 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         require(nodeTiers[_nodeId].price > 0, "Node does not exist");
         require(msg.value >= price, "Insufficient funds");
         require(
-            nodeTierToOwner[_nodeId] == address(0),
+            nodeTiersIdUserLinks[_nodeId] == address(0),
             "Node tier already owned"
         );
 
@@ -261,8 +261,8 @@ contract NodeManager is Pausable, AccessControl, Ownable {
         }
 
         nodeContract.safeMint(caller, _nodeId);
-        userNodeTiersLinks[caller].add(_nodeId);
-        nodeTierToOwner[_nodeId] = caller;
+        userNodeTiersIdLinks[caller].add(_nodeId);
+        nodeTiersIdUserLinks[_nodeId] = caller;
 
         // add Referral for user
         if (userReferralIdLinks[caller] == 0) {
@@ -332,12 +332,12 @@ contract NodeManager is Pausable, AccessControl, Ownable {
     {
         require(nodeTiers[_nodeId].price > 0, "Node does not exist");
         require(
-            nodeTierToOwner[_nodeId] == address(0),
+            nodeTiersIdUserLinks[_nodeId] == address(0),
             "Node tier already owned"
         );
         nodeContract.safeMint(nodeOwner, _nodeId);
-        userNodeTiersLinks[msg.sender].add(_nodeId);
-        nodeTierToOwner[_nodeId] = msg.sender;
+        userNodeTiersIdLinks[msg.sender].add(_nodeId);
+        nodeTiersIdUserLinks[_nodeId] = msg.sender;
         emit Sale(msg.sender, _nodeId);
     }
 
