@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract Node is
+contract BachiNode is
     ERC721,
     ERC721Enumerable,
     ERC721URIStorage,
